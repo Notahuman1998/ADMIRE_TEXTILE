@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADMIRE Textile Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <style>
+        .state-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        #fabric-canvas { width: 100% !important; height: 400px !important; border-radius: 12px; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        
+        .glow-active {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+            border-color: rgba(239, 68, 68, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200 min-h-screen font-sans transition-colors duration-300">
+
+    <!-- Navigation -->
+    <nav class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center gap-2">
+                    <svg class="w-7 h-7 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+                    </svg>
+                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">ADMIRE <span class="text-indigo-500 font-light">Textile Logic</span></h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="tab-live" class="px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-500 transition-colors">Live Visualization</button>
+                    <button id="tab-viewer" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors">Logic Analyzer</button>
+                    
+                    <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-2"></div>
+                    
+                    <button id="theme-toggle" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <svg id="theme-icon-dark" class="w-5 h-5 hidden text-slate-800" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                        <svg id="theme-icon-light" class="w-5 h-5 text-slate-200" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 2.32a1 1 0 011.415 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM14.22 15.465a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4.22-1.465a1 1 0 01-1.415 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414zM3 10a1 1 0 011-1h1a1 1 0 110 2H4a1 1 0 01-1-1zM4.693 5.405a1 1 0 010-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414 0zM10 5a5 5 0 100 10 5 5 0 000-10z" clip-rule="evenodd"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Live View -->
+    <div id="view-live" class="p-4 md:p-8 block">
+        <header class="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row md:justify-between md:items-end border-b border-slate-200 dark:border-slate-800 pb-4 gap-4">
+            <div>
+                <h2 class="text-xl font-bold text-slate-800 dark:text-white">Structural Contact Simulation</h2>
+                <p class="text-slate-500 text-sm mt-1 font-medium">Orthogonal Conductive Yarn Interaction & 3D Spatial Tracking</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
+                    <span id="status-text" class="text-xs font-bold text-slate-500 uppercase tracking-wide">Sim Offline</span>
+                </div>
+                <button id="btn-connect" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-md transition-all active:scale-95">
+                    Start Simulation (BLE Fake)
+                </button>
+            </div>
+        </header>
+
+        <main class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Column: Logic State & IMU Readout -->
+            <section class="lg:col-span-1 space-y-6">
+                <!-- Logic Gate Status -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-center">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6 w-full text-left border-b border-slate-100 dark:border-slate-800 pb-2">Hybrid Logic State</h3>
+                    
+                    <div id="logic-indicator" class="w-32 h-32 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-700 flex items-center justify-center mb-4 state-transition">
+                        <span id="logic-text" class="text-3xl font-black text-slate-400 font-mono tracking-widest">OFF</span>
+                    </div>
+                    
+                    <div class="w-full flex justify-between px-4 text-sm font-mono text-slate-500">
+                        <span>Circuit: <span id="circuit-status" class="font-bold text-slate-700 dark:text-slate-300">OPEN</span></span>
+                        <span>Out: <span id="logic-val" class="font-bold text-slate-700 dark:text-slate-300">0</span></span>
+                    </div>
+                </div>
+
+                <!-- IMU Data -->
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 dark:border-slate-800 pb-2">IMU Orientation</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between mb-1"><span class="text-slate-500 font-mono text-sm">Pitch (X)</span><span id="pitch-val" class="font-mono font-bold">0.0°</span></div>
+                            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div id="bar-pitch" class="bg-indigo-500 h-2 rounded-full transition-all duration-100" style="width:50%; transform-origin: center;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-1"><span class="text-slate-500 font-mono text-sm">Roll (Z)</span><span id="roll-val" class="font-mono font-bold">0.0°</span></div>
+                            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div id="bar-roll" class="bg-fuchsia-500 h-2 rounded-full transition-all duration-100" style="width:50%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Column: 3D Visualizer -->
+            <section class="lg:col-span-2">
+                <div class="bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden h-full min-h-[400px] flex flex-col">
+                    <div class="absolute top-6 left-6 z-10 pointer-events-none">
+                        <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800 dark:text-white drop-shadow-md">
+                            <svg class="w-5 h-5 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg>
+                            Fabric Structure Visualizer
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Multi-layer woven structure with orthogonal conductive traces.</p>
+                    </div>
+                    <canvas id="fabric-canvas" class="w-full flex-grow"></canvas>
+                </div>
+            </section>
+        </main>
+
+        <!-- Real-Time Trace -->
+        <section class="max-w-6xl mx-auto mt-6 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                Real-Time Logic Trace (Boolean Output)
+            </h2>
+            <div id="liveLogicChart" class="w-full h-[250px]"></div>
+        </section>
+
+    </div>
+
+    <!-- Analyzer View (Placeholder for future) -->
+    <div id="view-viewer" class="p-4 md:p-8 hidden">
+        <header class="max-w-6xl mx-auto mb-8 flex justify-between items-end border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div>
+                <h2 class="text-2xl font-bold">Logic Analyzer</h2>
+                <p class="text-slate-500 text-sm mt-1">Review historical state changes and contact hysteresis.</p>
+            </div>
+        </header>
+        <main class="max-w-6xl mx-auto text-center py-20 text-slate-500 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
+            <svg class="w-16 h-16 mx-auto mb-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            <p>Analyzer view is ready for CSV data ingestion in future hardware revisions.</p>
+        </main>
+    </div>
+
+    <script>
+        // --- THEME & UTILS ---
+        function getChartColors() {
+            const isDark = document.documentElement.classList.contains('dark');
+            return {
+                bg: 'rgba(0,0,0,0)',
+                text: isDark ? '#f8fafc' : '#1e293b',
+                grid: isDark ? '#334155' : '#e2e8f0',
+                primary: isDark ? '#818cf8' : '#4f46e5',
+                fill: isDark ? 'rgba(129, 140, 248, 0.2)' : 'rgba(79, 70, 229, 0.2)'
+            };
+        }
+
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-icon-dark');
+        const lightIcon = document.getElementById('theme-icon-light');
+
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            lightIcon.classList.remove('hidden'); darkIcon.classList.add('hidden');
+        } else {
+            document.documentElement.classList.remove('dark');
+            lightIcon.classList.add('hidden'); darkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            darkIcon.classList.toggle('hidden');
+            lightIcon.classList.toggle('hidden');
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('color-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+            
+            const colors = getChartColors();
+            const layoutUpdate = {
+                'title.font.color': colors.text,
+                'xaxis.color': colors.text,
+                'yaxis.color': colors.text,
+                'xaxis.gridcolor': colors.grid,
+                'yaxis.gridcolor': colors.grid
+            };
+            if (document.getElementById('liveLogicChart').data) {
+                Plotly.relayout('liveLogicChart', layoutUpdate);
+                Plotly.restyle('liveLogicChart', { 'line.color': colors.primary, 'fillcolor': colors.fill }, [0]);
+            }
+        });
+
+        // --- TAB NAVIGATION ---
+        const tabLive = document.getElementById('tab-live');
+        const tabViewer = document.getElementById('tab-viewer');
+        const viewLive = document.getElementById('view-live');
+        const viewViewer = document.getElementById('view-viewer');
+
+        function switchTab(activeTab) {
+            if (activeTab === 'live') {
+                viewLive.classList.remove('hidden'); viewViewer.classList.add('hidden');
+                tabLive.className = "px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-500 transition-colors";
+                tabViewer.className = "px-4 py-2 text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors";
+            } else {
+                viewLive.classList.add('hidden'); viewViewer.classList.remove('hidden');
+                tabViewer.className = "px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-500 transition-colors";
+                tabLive.className = "px-4 py-2 text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors";
+            }
+        }
+        tabLive.addEventListener('click', () => switchTab('live'));
+        tabViewer.addEventListener('click', () => switchTab('viewer'));
+
+        // --- CHART SETUP ---
+        let chartDataX = [];
+        let chartDataY = [];
+        const MAX_POINTS = 100;
+        let chartCounter = 0;
+
+        function initChart() {
+            const colors = getChartColors();
+            let trace = {
+                x: chartDataX, y: chartDataY,
+                mode: 'lines', name: 'Contact State',
+                line: { shape: 'hv', width: 3, color: colors.primary }, // 'hv' shape makes it a digital square wave
+                fill: 'tozeroy', fillcolor: colors.fill
+            };
+            let layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {title: 'Time (Samples)', color: colors.text, gridcolor: colors.grid, showgrid: false},
+                yaxis: {title: 'Binary State', color: colors.text, gridcolor: colors.grid, range: [-0.2, 1.2], tickvals: [0, 1], ticktext: ['OFF (0)', 'ON (1)']},
+                margin: {t: 10, b: 40, l: 60, r: 20},
+                showlegend: false
+            };
+            Plotly.newPlot('liveLogicChart', [trace], layout, {responsive: true});
+        }
+        initChart();
+
+        // --- THREE.JS FABRIC SETUP ---
+        const canvas = document.getElementById('fabric-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / 400, 0.1, 100);
+        camera.position.set(5, 4, 6);
+        camera.lookAt(0, 0, 0);
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        // Group to rotate everything with IMU
+        const fabricGroup = new THREE.Group();
+        scene.add(fabricGroup);
+
+        // Materials
+        const fabricMaterialBottom = new THREE.MeshPhysicalMaterial({ 
+            color: 0x334155, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.6, side: THREE.DoubleSide 
+        });
+        const fabricMaterialTop = new THREE.MeshPhysicalMaterial({ 
+            color: 0x475569, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.5, side: THREE.DoubleSide 
+        });
+        
+        const wireMaterialCopper = new THREE.MeshStandardMaterial({ color: 0xd97757, metalness: 0.8, roughness: 0.3 });
+        const wireMaterialSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 });
+
+        // Geometries
+        const planeGeo = new THREE.PlaneGeometry(6, 6, 10, 10);
+        const wireGeoX = new THREE.CylinderGeometry(0.04, 0.04, 6, 8);
+        const wireGeoZ = new THREE.CylinderGeometry(0.04, 0.04, 6, 8);
+        wireGeoX.rotateZ(Math.PI / 2);
+        wireGeoZ.rotateX(Math.PI / 2);
+
+        // Bottom Layer Construction
+        const bottomLayer = new THREE.Group();
+        const bottomMesh = new THREE.Mesh(planeGeo, fabricMaterialBottom);
+        bottomMesh.rotation.x = -Math.PI / 2;
+        const bottomWire = new THREE.Mesh(wireGeoX, wireMaterialSilver); // Horizontal wire
+        bottomWire.position.y = 0.05; // Slightly above fabric
+        bottomLayer.add(bottomMesh);
+        bottomLayer.add(bottomWire);
+        fabricGroup.add(bottomLayer);
+
+        // Top Layer Construction
+        const topLayer = new THREE.Group();
+        topLayer.position.y = 0.8; // Initial Gap
+        const topMesh = new THREE.Mesh(planeGeo, fabricMaterialTop);
+        topMesh.rotation.x = -Math.PI / 2;
+        const topWire = new THREE.Mesh(wireGeoZ, wireMaterialCopper); // Vertical wire
+        topWire.position.y = -0.05; // Slightly below fabric
+        topLayer.add(topMesh);
+        topLayer.add(topWire);
+        fabricGroup.add(topLayer);
+
+        // Glowing Contact Point
+        const glowGeo = new THREE.SphereGeometry(0.15, 16, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0 });
+        const contactGlow = new THREE.Mesh(glowGeo, glowMaterial);
+        contactGlow.position.y = 0.05; // Between the layers
+        fabricGroup.add(contactGlow);
+
+        // Point Light for dramatic effect when connected
+        const contactLight = new THREE.PointLight(0xef4444, 0, 3);
+        contactLight.position.set(0, 0.1, 0);
+        fabricGroup.add(contactLight);
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            const width = canvas.clientWidth;
+            renderer.setSize(width, 400, false);
+            camera.aspect = width / 400;
+            camera.updateProjectionMatrix();
+        });
+        renderer.setSize(canvas.clientWidth, 400, false);
+
+        // --- ANIMATION / DATA LOGIC ---
+        let currentPitch = 0, currentRoll = 0;
+        let targetPitch = 0, targetRoll = 0;
+        let isContact = false;
+        let time = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Smooth IMU rotations
+            currentPitch += (targetPitch - currentPitch) * 0.1;
+            currentRoll += (targetRoll - currentRoll) * 0.1;
+            fabricGroup.rotation.x = currentPitch * Math.PI / 180;
+            fabricGroup.rotation.z = currentRoll * Math.PI / 180;
+
+            // Animate structural contact (layer bending/touching)
+            const targetGap = isContact ? 0.1 : 0.8;
+            topLayer.position.y += (targetGap - topLayer.position.y) * 0.15;
+
+            // Animate Glow Effect
+            if (isContact) {
+                time += 0.1;
+                const pulse = 0.7 + Math.sin(time * 5) * 0.3; // Pulsing opacity
+                glowMaterial.opacity = pulse;
+                contactLight.intensity = pulse * 2;
+                contactGlow.scale.setScalar(1 + Math.sin(time * 5) * 0.1);
+            } else {
+                glowMaterial.opacity -= glowMaterial.opacity * 0.2;
+                contactLight.intensity -= contactLight.intensity * 0.2;
+                contactGlow.scale.setScalar(1);
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- FAKE BLE DATA SIMULATION ---
+        let simInterval = null;
+        let simTime = 0;
+
+        function processIncomingData(pitch, roll, contactState) {
+            // Update 3D Targets
+            targetPitch = pitch;
+            targetRoll = roll;
+            isContact = (contactState === 1);
+
+            // Update DOM UI
+            document.getElementById('pitch-val').textContent = pitch.toFixed(1) + '°';
+            document.getElementById('roll-val').textContent = roll.toFixed(1) + '°';
+            
+            // Map -90 to +90 to 0% to 100%
+            const mapRange = (val) => Math.max(0, Math.min(100, (val + 90) / 180 * 100));
+            document.getElementById('bar-pitch').style.width = mapRange(pitch) + '%';
+            document.getElementById('bar-roll').style.width = mapRange(roll) + '%';
+
+            const indicator = document.getElementById('logic-indicator');
+            const logicText = document.getElementById('logic-text');
+            const circuitStatus = document.getElementById('circuit-status');
+            const logicVal = document.getElementById('logic-val');
+
+            if (isContact) {
+                indicator.classList.remove('border-slate-300', 'dark:border-slate-700', 'bg-slate-100', 'dark:bg-slate-800');
+                indicator.classList.add('glow-active', 'bg-red-500/10');
+                logicText.textContent = "ON";
+                logicText.classList.remove('text-slate-400');
+                logicText.classList.add('text-red-500');
+                circuitStatus.textContent = "CLOSED (Contact)";
+                circuitStatus.className = "font-bold text-red-500";
+                logicVal.textContent = "1";
+                logicVal.className = "font-bold text-red-500";
+            } else {
+                indicator.classList.add('border-slate-300', 'dark:border-slate-700', 'bg-slate-100', 'dark:bg-slate-800');
+                indicator.classList.remove('glow-active', 'bg-red-500/10');
+                logicText.textContent = "OFF";
+                logicText.classList.add('text-slate-400');
+                logicText.classList.remove('text-red-500');
+                circuitStatus.textContent = "OPEN (Separated)";
+                circuitStatus.className = "font-bold text-slate-500 dark:text-slate-400";
+                logicVal.textContent = "0";
+                logicVal.className = "font-bold text-slate-500 dark:text-slate-400";
+            }
+
+            // Update Chart
+            chartCounter++;
+            chartDataX.push(chartCounter);
+            chartDataY.push(contactState);
+
+            if (chartDataX.length > MAX_POINTS) {
+                chartDataX.shift();
+                chartDataY.shift();
+            }
+
+            Plotly.update('liveLogicChart', { x: [chartDataX], y: [chartDataY] });
+        }
+
+        function runSimulationTick() {
+            simTime += 0.1;
+            
+            // Generate Fake IMU (gentle sway like someone wearing the fabric)
+            const p = Math.sin(simTime * 0.5) * 15 + Math.sin(simTime * 0.2) * 5;
+            const r = Math.cos(simTime * 0.4) * 10;
+            
+            // Generate Fake Contact State (Toggles every few seconds based on sine wave thresholding)
+            // Simulating thresholding: If structural pressure/bend crosses a point, it connects.
+            const threshold = 0.5;
+            const analogPressure = Math.sin(simTime * 0.8) * Math.cos(simTime * 0.3); // Complex wave
+            const c = analogPressure > threshold ? 1 : 0;
+
+            processIncomingData(p, r, c);
+        }
+
+        const btnConnect = document.getElementById('btn-connect');
+        
+        btnConnect.addEventListener('click', () => {
+            if (simInterval) {
+                // Disconnect
+                clearInterval(simInterval);
+                simInterval = null;
+                btnConnect.textContent = "Start Simulation (BLE Fake)";
+                btnConnect.classList.remove('bg-red-500', 'hover:bg-red-600');
+                btnConnect.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                
+                document.getElementById('status-text').textContent = 'SIM OFFLINE';
+                document.getElementById('status-text').className = 'text-xs font-bold text-slate-500 uppercase tracking-wide';
+                document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+                
+                // Reset state to open
+                processIncomingData(0, 0, 0);
+            } else {
+                // Connect (Simulated)
+                btnConnect.textContent = "Stop Simulation";
+                btnConnect.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                btnConnect.classList.add('bg-red-500', 'hover:bg-red-600');
+                
+                document.getElementById('status-text').textContent = 'SIM RUNNING';
+                document.getElementById('status-text').className = 'text-xs font-bold text-indigo-600 uppercase tracking-wide';
+                document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse';
+                
+                // Start ticking at 10Hz (100ms)
+                simInterval = setInterval(runSimulationTick, 100);
+            }
+        });
+
+    </script>
+</body>
+</html>
