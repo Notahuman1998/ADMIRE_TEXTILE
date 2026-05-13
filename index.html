@@ -224,7 +224,7 @@
             let trace = {
                 x: chartDataX, y: chartDataY,
                 mode: 'lines', name: 'Contact State',
-                line: { shape: 'hv', width: 3, color: colors.primary }, // 'hv' shape makes it a digital square wave
+                line: { shape: 'hv', width: 3, color: colors.primary }, 
                 fill: 'tozeroy', fillcolor: colors.fill
             };
             let layout = {
@@ -238,7 +238,7 @@
         }
         initChart();
 
-        // --- THREE.JS FABRIC SETUP ---
+        // --- THREE.JS TEXTILE VISUALIZER SETUP ---
         const canvas = document.getElementById('fabric-canvas');
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
@@ -248,66 +248,109 @@
         camera.position.set(5, 4, 6);
         camera.lookAt(0, 0, 0);
 
-        // Lighting
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
         dirLight.position.set(5, 10, 5);
         scene.add(dirLight);
 
-        // Group to rotate everything with IMU
-        const fabricGroup = new THREE.Group();
-        scene.add(fabricGroup);
+        // Geometries (Highly segmented for fabric bending)
+        const planeGeoBottom = new THREE.PlaneGeometry(6, 6, 40, 40);
+        const planeGeoTop = new THREE.PlaneGeometry(6, 6, 40, 40);
+        
+        const wireGeoX = new THREE.CylinderGeometry(0.04, 0.04, 6, 8, 40);
+        const wireGeoZ = new THREE.CylinderGeometry(0.04, 0.04, 6, 8, 40);
 
         // Materials
-        const fabricMaterialBottom = new THREE.MeshPhysicalMaterial({ 
-            color: 0x334155, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.6, side: THREE.DoubleSide 
-        });
-        const fabricMaterialTop = new THREE.MeshPhysicalMaterial({ 
-            color: 0x475569, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.5, side: THREE.DoubleSide 
-        });
+        const matBottom = new THREE.MeshPhysicalMaterial({ color: 0x334155, roughness: 0.9, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+        const matBottomWireframe = new THREE.MeshBasicMaterial({ color: 0x0f172a, wireframe: true, transparent: true, opacity: 0.2 });
         
-        const wireMaterialCopper = new THREE.MeshStandardMaterial({ color: 0xd97757, metalness: 0.8, roughness: 0.3 });
-        const wireMaterialSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 });
+        const matTop = new THREE.MeshPhysicalMaterial({ color: 0x475569, roughness: 0.9, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+        const matTopWireframe = new THREE.MeshBasicMaterial({ color: 0x1e293b, wireframe: true, transparent: true, opacity: 0.3 });
+        
+        const wireMatCopper = new THREE.MeshStandardMaterial({ color: 0xd97757, metalness: 0.8, roughness: 0.3 });
+        const wireMatSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 });
 
-        // Geometries
-        const planeGeo = new THREE.PlaneGeometry(6, 6, 10, 10);
-        const wireGeoX = new THREE.CylinderGeometry(0.04, 0.04, 6, 8);
-        const wireGeoZ = new THREE.CylinderGeometry(0.04, 0.04, 6, 8);
-        wireGeoX.rotateZ(Math.PI / 2);
-        wireGeoZ.rotateX(Math.PI / 2);
-
-        // Bottom Layer Construction
+        // --- BOTTOM LAYER (Stabilized & Wavy) ---
         const bottomLayer = new THREE.Group();
-        const bottomMesh = new THREE.Mesh(planeGeo, fabricMaterialBottom);
+        
+        // Add static natural wrinkles to the bottom plane
+        const posB = planeGeoBottom.attributes.position;
+        for(let i=0; i<posB.count; i++) {
+            const x = posB.getX(i);
+            const y = posB.getY(i);
+            posB.setZ(i, Math.sin(x * 1.5) * Math.cos(y * 1.5) * 0.05); // Fabric wrinkles
+        }
+        planeGeoBottom.computeVertexNormals();
+
+        const bottomMesh = new THREE.Mesh(planeGeoBottom, matBottom);
+        bottomMesh.add(new THREE.Mesh(planeGeoBottom, matBottomWireframe)); // Woven effect
         bottomMesh.rotation.x = -Math.PI / 2;
-        const bottomWire = new THREE.Mesh(wireGeoX, wireMaterialSilver); // Horizontal wire
-        bottomWire.position.y = 0.05; // Slightly above fabric
+        
+        // Bottom Conductive Wire (Runs along X-axis)
+        const posBW = wireGeoX.attributes.position;
+        for(let i=0; i<posBW.count; i++) {
+            const bx = posBW.getX(i); 
+            const by = posBW.getY(i); // This represents the length due to default cylinder setup
+            const bz = posBW.getZ(i); 
+            // Match the plane's wrinkles perfectly
+            posBW.setX(i, bx + Math.sin(by * 1.5) * Math.cos(0) * 0.05); 
+        }
+        wireGeoX.computeVertexNormals();
+        
+        const bottomWire = new THREE.Mesh(wireGeoX, wireMatSilver);
+        bottomWire.rotation.z = Math.PI / 2;
+        bottomWire.position.y = 0.04; // Resting on the fabric
+        
         bottomLayer.add(bottomMesh);
         bottomLayer.add(bottomWire);
-        fabricGroup.add(bottomLayer);
+        scene.add(bottomLayer);
 
-        // Top Layer Construction
+        // --- TOP LAYER (Dynamic Stretch & Dip) ---
         const topLayer = new THREE.Group();
-        topLayer.position.y = 0.8; // Initial Gap
-        const topMesh = new THREE.Mesh(planeGeo, fabricMaterialTop);
+        topLayer.position.y = 0.8; // Baseline gap
+
+        // Save base coordinates to compute stretch each frame
+        const posT = planeGeoTop.attributes.position;
+        const topBaseX = new Float32Array(posT.count);
+        const topBaseY = new Float32Array(posT.count);
+        for(let i=0; i<posT.count; i++) {
+            topBaseX[i] = posT.getX(i);
+            topBaseY[i] = posT.getY(i);
+        }
+
+        const topMesh = new THREE.Mesh(planeGeoTop, matTop);
+        topMesh.add(new THREE.Mesh(planeGeoTop, matTopWireframe)); // Woven effect
         topMesh.rotation.x = -Math.PI / 2;
-        const topWire = new THREE.Mesh(wireGeoZ, wireMaterialCopper); // Vertical wire
-        topWire.position.y = -0.05; // Slightly below fabric
+
+        // Save top wire base coordinates
+        const posTW = wireGeoZ.attributes.position;
+        const twBaseX = new Float32Array(posTW.count);
+        const twBaseY = new Float32Array(posTW.count);
+        const twBaseZ = new Float32Array(posTW.count);
+        for(let i=0; i<posTW.count; i++) {
+            twBaseX[i] = posTW.getX(i);
+            twBaseY[i] = posTW.getY(i);
+            twBaseZ[i] = posTW.getZ(i);
+        }
+
+        const topWire = new THREE.Mesh(wireGeoZ, wireMatCopper);
+        topWire.rotation.x = Math.PI / 2; // Runs along Z-axis
+        topWire.position.y = -0.04; // Below top fabric
+
         topLayer.add(topMesh);
         topLayer.add(topWire);
-        fabricGroup.add(topLayer);
+        scene.add(topLayer);
 
-        // Glowing Contact Point
+        // --- GLOW EFFECT ---
         const glowGeo = new THREE.SphereGeometry(0.15, 16, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0 });
         const contactGlow = new THREE.Mesh(glowGeo, glowMaterial);
-        contactGlow.position.y = 0.05; // Between the layers
-        fabricGroup.add(contactGlow);
+        contactGlow.position.y = 0.05; // Ground level contact point
+        scene.add(contactGlow);
 
-        // Point Light for dramatic effect when connected
         const contactLight = new THREE.PointLight(0xef4444, 0, 3);
         contactLight.position.set(0, 0.1, 0);
-        fabricGroup.add(contactLight);
+        scene.add(contactLight);
 
         // Resize handler
         window.addEventListener('resize', () => {
@@ -322,28 +365,77 @@
         let currentPitch = 0, currentRoll = 0;
         let targetPitch = 0, targetRoll = 0;
         let isContact = false;
+        
         let time = 0;
+        let dipAmount = 0;
+        let stretchAmount = 1.0;
 
         function animate() {
             requestAnimationFrame(animate);
+            time += 0.05;
 
-            // Smooth IMU rotations
-            currentPitch += (targetPitch - currentPitch) * 0.1;
-            currentRoll += (targetRoll - currentRoll) * 0.1;
-            fabricGroup.rotation.x = currentPitch * Math.PI / 180;
-            fabricGroup.rotation.z = currentRoll * Math.PI / 180;
+            // Sway Camera with IMU (Bottom layer stays stable!)
+            currentPitch += (targetPitch - currentPitch) * 0.05;
+            currentRoll += (targetRoll - currentRoll) * 0.05;
+            camera.position.x = 5 + currentRoll * 0.04;
+            camera.position.y = 4 + currentPitch * 0.04;
+            camera.lookAt(0, 0, 0);
 
-            // Animate structural contact (layer bending/touching)
-            const targetGap = isContact ? 0.1 : 0.8;
-            topLayer.position.y += (targetGap - topLayer.position.y) * 0.15;
+            // Animate Top Fabric Dip & Stretch
+            const targetDip = isContact ? 0.7 : 0.0;     // Dips down by 0.7 units to touch
+            const targetStretch = isContact ? 1.15 : 1.0; // Stretches outwards by 15%
+            dipAmount += (targetDip - dipAmount) * 0.1;
+            stretchAmount += (targetStretch - stretchAmount) * 0.1;
+
+            // 1. Update Top Plane Vertices
+            for (let i = 0; i < posT.count; i++) {
+                const bx = topBaseX[i];
+                const by = topBaseY[i];
+                
+                // Scale outward
+                const x = bx * stretchAmount;
+                const y = by * stretchAmount;
+                posT.setX(i, x);
+                posT.setY(i, y);
+                
+                // Gaussian Bell Curve for dipping the center smoothly
+                const dist = Math.sqrt(x*x + y*y);
+                const influence = Math.exp(-(dist * dist) / 4); 
+                
+                // Dynamic breathing wrinkles
+                const wave = Math.sin(x * 1.5 + time) * Math.cos(y * 1.5 + time * 0.8) * 0.06;
+                
+                posT.setZ(i, wave - (dipAmount * influence));
+            }
+            planeGeoTop.computeVertexNormals();
+            posT.needsUpdate = true;
+
+            // 2. Update Top Wire Vertices to perfectly match the fabric
+            for(let i = 0; i < posTW.count; i++) {
+                const bx = twBaseX[i]; // Cross-section radius
+                const by = twBaseY[i]; // Length of cylinder
+                const bz = twBaseZ[i]; // Cross-section radius
+
+                // Stretch length
+                const planeY = by * stretchAmount; 
+                const planeX = bx;
+                
+                const dist = Math.abs(planeY);
+                const influence = Math.exp(-(dist * dist) / 4);
+                const wave = Math.sin(planeX * 1.5 + time) * Math.cos(planeY * 1.5 + time * 0.8) * 0.06;
+
+                posTW.setY(i, planeY); 
+                posTW.setZ(i, bz + wave - (dipAmount * influence));
+            }
+            wireGeoZ.computeVertexNormals();
+            posTW.needsUpdate = true;
 
             // Animate Glow Effect
             if (isContact) {
-                time += 0.1;
-                const pulse = 0.7 + Math.sin(time * 5) * 0.3; // Pulsing opacity
+                const pulse = 0.7 + Math.sin(time * 4) * 0.3;
                 glowMaterial.opacity = pulse;
                 contactLight.intensity = pulse * 2;
-                contactGlow.scale.setScalar(1 + Math.sin(time * 5) * 0.1);
+                contactGlow.scale.setScalar(1 + Math.sin(time * 4) * 0.1);
             } else {
                 glowMaterial.opacity -= glowMaterial.opacity * 0.2;
                 contactLight.intensity -= contactLight.intensity * 0.2;
@@ -359,16 +451,13 @@
         let simTime = 0;
 
         function processIncomingData(pitch, roll, contactState) {
-            // Update 3D Targets
             targetPitch = pitch;
             targetRoll = roll;
             isContact = (contactState === 1);
 
-            // Update DOM UI
             document.getElementById('pitch-val').textContent = pitch.toFixed(1) + '°';
             document.getElementById('roll-val').textContent = roll.toFixed(1) + '°';
             
-            // Map -90 to +90 to 0% to 100%
             const mapRange = (val) => Math.max(0, Math.min(100, (val + 90) / 180 * 100));
             document.getElementById('bar-pitch').style.width = mapRange(pitch) + '%';
             document.getElementById('bar-roll').style.width = mapRange(roll) + '%';
@@ -400,7 +489,6 @@
                 logicVal.className = "font-bold text-slate-500 dark:text-slate-400";
             }
 
-            // Update Chart
             chartCounter++;
             chartDataX.push(chartCounter);
             chartDataY.push(contactState);
@@ -416,14 +504,11 @@
         function runSimulationTick() {
             simTime += 0.1;
             
-            // Generate Fake IMU (gentle sway like someone wearing the fabric)
             const p = Math.sin(simTime * 0.5) * 15 + Math.sin(simTime * 0.2) * 5;
             const r = Math.cos(simTime * 0.4) * 10;
             
-            // Generate Fake Contact State (Toggles every few seconds based on sine wave thresholding)
-            // Simulating thresholding: If structural pressure/bend crosses a point, it connects.
             const threshold = 0.5;
-            const analogPressure = Math.sin(simTime * 0.8) * Math.cos(simTime * 0.3); // Complex wave
+            const analogPressure = Math.sin(simTime * 0.8) * Math.cos(simTime * 0.3);
             const c = analogPressure > threshold ? 1 : 0;
 
             processIncomingData(p, r, c);
@@ -433,7 +518,6 @@
         
         btnConnect.addEventListener('click', () => {
             if (simInterval) {
-                // Disconnect
                 clearInterval(simInterval);
                 simInterval = null;
                 btnConnect.textContent = "Start Simulation (BLE Fake)";
@@ -444,10 +528,8 @@
                 document.getElementById('status-text').className = 'text-xs font-bold text-slate-500 uppercase tracking-wide';
                 document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
                 
-                // Reset state to open
                 processIncomingData(0, 0, 0);
             } else {
-                // Connect (Simulated)
                 btnConnect.textContent = "Stop Simulation";
                 btnConnect.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
                 btnConnect.classList.add('bg-red-500', 'hover:bg-red-600');
@@ -456,11 +538,9 @@
                 document.getElementById('status-text').className = 'text-xs font-bold text-indigo-600 uppercase tracking-wide';
                 document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse';
                 
-                // Start ticking at 10Hz (100ms)
                 simInterval = setInterval(runSimulationTick, 100);
             }
         });
-
     </script>
 </body>
 </html>
