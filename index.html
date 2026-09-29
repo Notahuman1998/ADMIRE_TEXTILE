@@ -1,546 +1,684 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADMIRE Textile Dashboard</title>
+    <title>ADMIRE</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     
     <style>
-        .state-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        #fabric-canvas { width: 100% !important; height: 400px !important; border-radius: 12px; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        body { font-family: 'Inter', sans-serif; background-color: #FAFAFA; color: #18181b; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
         
-        .glow-active {
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-            border-color: rgba(239, 68, 68, 1);
+        /* --- Navigation Tabs --- */
+        .tab-btn {
+            padding: 12px 24px;
+            font-weight: 600;
+            color: #64748B;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease;
         }
+        .tab-btn:hover { color: #8B5CF6; }
+        .tab-btn.active {
+            color: #8B5CF6;
+            border-bottom: 3px solid #8B5CF6;
+        }
+        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Shared Dashboard Styles --- */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        @media (max-width: 900px) { .dashboard-container { grid-template-columns: 1fr; } }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            border: 1px solid #E2E8F0;
+            padding: 24px;
+        }
+
+        /* --- ADMIRE Woven Styles --- */
+        .heater-btn {
+            width: 100%; padding: 12px; border-radius: 10px; font-weight: 600; font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid #E2E8F0; background-color: #F8FAFC; color: #64748B; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .heater-btn:hover { border-color: #CBD5E1; }
+        .heater-btn.active-heater {
+            border-color: #F97316; background-color: #FFF7ED; color: #C2410C;
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+        }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background-color: #CBD5E1; transition: background-color 0.3s; }
+        .heater-btn.active-heater .status-dot { background-color: #F97316; box-shadow: 0 0 8px #F97316; }
+        .svg-container {
+            width: 100%; background: #FAFAFA; border: 1px inset #E2E8F0; border-radius: 12px;
+            margin-top: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 350px;
+        }
+        .output-box { background-color: #18181b; color: white; border-radius: 12px; padding: 16px; text-align: center; margin-top: 16px; transition: all 0.3s ease; }
+        .output-box.active-low { background-color: #3B82F6; } 
+        .output-box.active-high { background-color: #10B981; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748B; }
+        .legend-line { width: 20px; height: 4px; border-radius: 2px; }
+        .svg-text { font-family: 'JetBrains Mono', monospace; font-size: 11px; fill: #7A8794; }
+        .struct-weft { fill: none; stroke: #E4E1DA; stroke-width: 10; stroke-linecap: round; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .lce-yarn-top { fill: none; stroke: #CBD5E1; stroke-width: 24; stroke-linecap: round; opacity: 0.2; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .cond-yarn { fill: none; stroke-width: 14; stroke-linecap: round; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 4px 4px rgba(0,0,0,0.2)); }
+        .elec-path-2d { transition: stroke 0.6s ease, fill 0.6s ease, filter 0.6s ease; }
+
+        /* --- Knit Slider Styles --- */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%;
+            background: #8B5CF6; cursor: pointer; margin-top: -10px;
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.4); border: 2px solid white;
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; cursor: pointer; background: #E2E8F0; border-radius: 3px; }
+        input[type=range]:focus { outline: none; }
+        .glow-text { text-shadow: 0 0 10px rgba(139, 92, 246, 0.6); }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200 min-h-screen font-sans transition-colors duration-300">
+<body class="min-h-screen flex flex-col">
 
-    <!-- Navigation -->
-    <nav class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 sticky top-0 z-50 shadow-sm">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center gap-2">
-                    <svg class="w-7 h-7 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
-                    </svg>
-                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">ADMIRE <span class="text-indigo-500 font-light">Textile Logic</span></h1>
+    <!-- NAVIGATION HEADER -->
+    <header class="bg-white border-b border-zinc-200 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 pt-4 flex justify-between items-end">
+            <div class="pb-3">
+                <!-- <h1 class="text-xl font-extrabold text-zinc-900 tracking-tight"> ADMIRE</h1> -->
+                <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">ADMIRE <span class="text-indigo-500 font-light">Textile Logic</span></h1> 
+                <p class="text-xs text-zinc-500 uppercase tracking-widest font-semibold">E-Textile Simulations</p>
+            </div>
+            <nav class="flex space-x-2">
+                <button class="tab-btn active" onclick="switchTab('tab-woven')">Woven NAND Gate</button>
+                <button class="tab-btn" onclick="switchTab('tab-knit')">Knitted Switch Array</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow p-6 md:p-12">
+        
+        <!-- ========================================== -->
+        <!-- TAB 1: WOVEN NAND GATE (ADMIRE)            -->
+        <!-- ========================================== -->
+        <div id="tab-woven" class="tab-content active">
+            <div class="dashboard-container">
+                <!-- LEFT COLUMN: CONTROLS & TRUTH TABLE -->
+                <div class="flex flex-col gap-6">
+                    <div class="card sticky top-24">
+                        <div class="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Control Panel</div>
+                        <h2 class="text-xl font-bold text-zinc-900 mb-6">Thermal Inputs</h2>
+                        
+                        <div class="flex flex-col gap-4">
+                            <button id="btn-heater-a" onclick="toggleHeater('A')" class="heater-btn">
+                                <span>Heater A (Left LCE)</span>
+                                <div class="status-dot"></div>
+                            </button>
+                            <button id="btn-heater-b" onclick="toggleHeater('B')" class="heater-btn">
+                                <span>Heater B (Right LCE)</span>
+                                <div class="status-dot"></div>
+                            </button>
+                        </div>
+        
+                        <div class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 mt-8">Logic Analyzer</div>
+                        <h2 class="text-lg font-bold text-zinc-900 mb-4">NAND Gate Output</h2>
+                        
+                        <div class="grid grid-cols-2 gap-2 text-sm mb-4">
+                            <div class="text-zinc-500">Input A:</div>
+                            <div id="val-a" class="mono font-bold text-right text-zinc-800">0 (Cool)</div>
+                            <div class="text-zinc-500">Input B:</div>
+                            <div id="val-b" class="mono font-bold text-right text-zinc-800">0 (Cool)</div>
+                        </div>
+                        
+                        <div id="nand-output" class="output-box active-high">
+                            <div class="text-xs text-white/70 uppercase tracking-wider mb-1">System State</div>
+                            <div class="text-3xl font-bold mono" id="nand-val">1</div>
+                            <div class="text-xs text-white/70 mt-1" id="nand-desc">Circuit is open/neutral.</div>
+                        </div>
+        
+                        <!-- Truth Table -->
+                        <div class="mt-6 border-t border-zinc-100 pt-4">
+                            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 text-center">Truth Table (NAND)</div>
+                            <table class="w-full text-sm text-center border-collapse">
+                                <thead>
+                                    <tr class="bg-zinc-50 text-zinc-500 text-xs">
+                                        <th class="py-2 border border-zinc-200 rounded-tl-lg font-semibold">A</th>
+                                        <th class="py-2 border-y border-r border-zinc-200 font-semibold">B</th>
+                                        <th class="py-2 border-y border-r border-zinc-200 rounded-tr-lg font-semibold">Output</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="mono">
+                                    <tr id="tt-00" class="transition-colors bg-blue-50 shadow-inner"><td class="py-2 border border-zinc-200">0</td><td class="border-y border-r border-zinc-200">0</td><td class="border-y border-r border-zinc-200 font-bold text-emerald-600">1</td></tr>
+                                    <tr id="tt-10" class="transition-colors"><td class="py-2 border border-zinc-200">1</td><td class="border-y border-r border-zinc-200">0</td><td class="border-y border-r border-zinc-200 font-bold text-emerald-600">1</td></tr>
+                                    <tr id="tt-01" class="transition-colors"><td class="py-2 border border-zinc-200">0</td><td class="border-y border-r border-zinc-200">1</td><td class="border-y border-r border-zinc-200 font-bold text-emerald-600">1</td></tr>
+                                    <tr id="tt-11" class="transition-colors"><td class="py-2 border border-zinc-200">1</td><td class="border-y border-r border-zinc-200">1</td><td class="border-y border-r border-zinc-200 font-bold text-blue-500">0</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <button id="tab-live" class="px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-500 transition-colors">Live Visualization</button>
-                    <button id="tab-viewer" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors">Logic Analyzer</button>
-                    
-                    <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-2"></div>
-                    
-                    <button id="theme-toggle" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                        <svg id="theme-icon-dark" class="w-5 h-5 hidden text-slate-800" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
-                        <svg id="theme-icon-light" class="w-5 h-5 text-slate-200" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 2.32a1 1 0 011.415 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM14.22 15.465a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4.22-1.465a1 1 0 01-1.415 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414zM3 10a1 1 0 011-1h1a1 1 0 110 2H4a1 1 0 01-1-1zM4.693 5.405a1 1 0 010-1.414l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414 0zM10 5a5 5 0 100 10 5 5 0 000-10z" clip-rule="evenodd"></path></svg>
-                    </button>
+        
+                <!-- RIGHT COLUMN: VISUALIZATIONS -->
+                <div class="flex flex-col gap-6">
+                    <!-- 2D SCHEMATIC VIEW -->
+                    <div class="card flex flex-col">
+                        <div class="mb-4">
+                            <h2 class="text-2xl font-bold text-zinc-900 mb-2">Basic 2D Schematic</h2>
+                            <p class="text-sm text-zinc-500">
+                                A simplified theoretical model of how the logic works. The voltage (Green) flows to the output unless <b>both</b> sliding contacts are heated, bridging the path completely to Ground (Blue).
+                            </p>
+                        </div>
+                        <div class="svg-container min-h-[300px]">
+                            <svg id="gateSVG" viewBox="0 0 640 400" fill="none" style="width: 100%; height: 100%; max-width: 640px; display: block; margin: 0 auto;">
+                                <defs>
+                                    <filter id="glowHeat2d" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"/>
+                                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                    </filter>
+                                </defs>
+                                <!-- VCC Side -->
+                                <circle cx="32" cy="200" r="16" fill="none" stroke="#10B981" stroke-width="2.5"/>
+                                <text x="32" y="196" class="mono font-bold" font-size="10" fill="#10B981" text-anchor="middle">VCC</text>
+                                <line x1="32" y1="216" x2="32" y2="216" stroke="#10B981" stroke-width="2"/>
+                                <line x1="48" y1="200" x2="88" y2="200" stroke="#10B981" stroke-width="6" stroke-linecap="round"/>
+                                <rect x="90" y="186" width="46" height="28" rx="6" fill="#FAFAFA" stroke="#10B981" stroke-width="2.5"/>
+                                <text x="113" y="204" class="mono font-bold" font-size="13" fill="#10B981" text-anchor="middle">R</text>
+                                <line id="weftLeft_2d" class="elec-path-2d" x1="136" y1="200" x2="200" y2="200" stroke="#10B981" stroke-width="6" stroke-linecap="round"/>
+                                <line id="weftBridge_2d" class="elec-path-2d" x1="240" y1="200" x2="320" y2="200" stroke="#94A3B8" stroke-width="6" stroke-linecap="round"/>
+                                <line id="weftRight_2d" class="elec-path-2d" x1="360" y1="200" x2="480" y2="200" stroke="#3B82F6" stroke-width="6" stroke-linecap="round"/>
+                                <!-- GND Side -->
+                                <line x1="480" y1="200" x2="580" y2="200" stroke="#3B82F6" stroke-width="6" stroke-linecap="round"/>
+                                <line x1="580" y1="190" x2="612" y2="190" stroke="#3B82F6" stroke-width="4" stroke-linecap="round"/>
+                                <line x1="584" y1="200" x2="608" y2="200" stroke="#3B82F6" stroke-width="3" stroke-linecap="round"/>
+                                <line x1="589" y1="210" x2="603" y2="210" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/>
+                                <text x="596" y="228" class="mono font-bold" font-size="10" fill="#3B82F6" text-anchor="middle">GND</text>
+                                <circle cx="480" cy="200" r="7" fill="#3B82F6"/>
+                                <!-- WARP PAIR A (2D) -->
+                                <line id="w1_2d" class="elec-path-2d" x1="200" y1="40" x2="200" y2="360" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+                                <line id="w1b_2d" class="elec-path-2d" x1="240" y1="40" x2="240" y2="360" stroke="#94A3B8" stroke-width="8" stroke-linecap="round"/>
+                                <line id="lceALine_2d" x1="204" y1="200" x2="236" y2="200" stroke="#CBD5E1" stroke-width="5" stroke-linecap="round" stroke-dasharray="4 3"/>
+                                <line id="lceAGlow_2d" x1="204" y1="200" x2="236" y2="200" stroke="#F97316" stroke-width="10" stroke-linecap="round" opacity="0" filter="url(#glowHeat2d)"/>
+                                <text id="lceALbl_2d" x="220" y="180" class="mono font-bold" font-size="11" fill="#94A3B8" text-anchor="middle" letter-spacing="0.06em">LCE A</text>
+                                <circle id="lceAContact_2d" cx="220" cy="200" r="5" fill="#F97316" opacity="0"/>
+                                <!-- WARP PAIR B (2D) -->
+                                <line id="w2_2d" class="elec-path-2d" x1="320" y1="40" x2="320" y2="360" stroke="#94A3B8" stroke-width="8" stroke-linecap="round"/>
+                                <line id="w2b_2d" class="elec-path-2d" x1="360" y1="40" x2="360" y2="360" stroke="#3B82F6" stroke-width="8" stroke-linecap="round"/>
+                                <line id="lceBLine_2d" x1="324" y1="200" x2="356" y2="200" stroke="#CBD5E1" stroke-width="5" stroke-linecap="round" stroke-dasharray="4 3"/>
+                                <line id="lceBGlow_2d" x1="324" y1="200" x2="356" y2="200" stroke="#F97316" stroke-width="10" stroke-linecap="round" opacity="0" filter="url(#glowHeat2d)"/>
+                                <text id="lceBLbl_2d" x="340" y="180" class="mono font-bold" font-size="11" fill="#94A3B8" text-anchor="middle" letter-spacing="0.06em">LCE B</text>
+                                <circle id="lceBContact_2d" cx="340" cy="200" r="5" fill="#F97316" opacity="0"/>
+                                <!-- OUTPUT TAP (2D) -->
+                                <circle id="outDot_2d" class="elec-path-2d" cx="160" cy="200" r="7" fill="#10B981" stroke="#10B981" stroke-width="2.5"/>
+                                <line id="outStem_2d" class="elec-path-2d" x1="160" y1="192" x2="160" y2="68" stroke="#10B981" stroke-width="5" stroke-linecap="round"/>
+                                <polyline id="outArr1_2d" class="elec-path-2d" points="148,76 160,58 172,76" stroke="#10B981" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                <text id="outLabel_2d" class="elec-path-2d mono font-bold" x="160" y="46" font-size="12" fill="#10B981" text-anchor="middle" letter-spacing="0.05em">OUTPUT</text>
+                                <text x="220" y="378" class="mono" font-size="9" fill="#9ca3af" text-anchor="middle">Horizontal Sliding Contact</text>
+                                <text x="340" y="378" class="mono" font-size="9" fill="#9ca3af" text-anchor="middle">Horizontal Sliding Contact</text>
+                            </svg>
+                        </div>
+                    </div>
+        
+                    <!-- 3D SERIES TOPOLOGY VIEW -->
+                    <div class="card flex flex-col">
+                        <div class="mb-4">
+                            <h2 class="text-2xl font-bold text-zinc-900 mb-2">3D Textile Implementation</h2>
+                            <p class="text-sm text-zinc-500">
+                                In the actual woven structure, the contacts move in the Z-axis (vertically). Current flows from Top to Bottom <i>only</i> if both LCE actuators contract.
+                            </p>
+                        </div>
+                        <!-- TOP VIEW -->
+                        <div class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 mt-2">Top Layer (Conductive Circuit)</div>
+                        <div class="svg-container min-h-[250px] mb-6">
+                            <svg viewBox="0 0 600 420" style="width: 100%; height: 100%; overflow: visible; max-width: 700px; margin: 0 auto; display: block;">
+                                <!-- LCEs (Faint from Top View) -->
+                                <path id="lce-a-top" class="lce-yarn-top" d="M 200 40 Q 200 160 200 280" />
+                                <path id="lce-b-top" class="lce-yarn-top" d="M 400 160 Q 400 280 400 400" />
+                                <!-- Structural Wefts -->
+                                <path id="fw1-top" class="struct-weft" d="M 50 80 Q 300 80 550 80" />
+                                <path id="fw2-top" class="struct-weft" d="M 50 160 Q 300 160 550 160" />
+                                <path id="fw3-top" class="struct-weft" d="M 50 200 Q 300 200 550 200" />
+                                <path id="fw4-top" class="struct-weft" d="M 50 280 Q 300 280 550 280" />
+                                <path id="fw5-top" class="struct-weft" d="M 50 320 Q 300 320 550 320" />
+                                <path id="fw6-top" class="struct-weft" d="M 50 360 Q 300 360 550 360" />
+                                <!-- Conductive Wefts -->
+                                <path id="weft-1-top" class="cond-yarn" stroke="#10B981" d="M 50 120 Q 300 120 550 120" />
+                                <text x="100" y="105" class="svg-text font-bold">Cond. Weft 1 (V_OUT Node)</text>
+                                <!-- VCC & Pull-Up Resistor -->
+                                <path d="M 50 120 L 50 100" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" />
+                                <rect x="40" y="60" width="20" height="40" fill="none" stroke="#10B981" stroke-width="3" />
+                                <path d="M 50 60 L 50 40" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="50" cy="40" r="5" fill="#10B981" />
+                                <text x="50" y="25" class="svg-text font-bold" fill="#10B981" text-anchor="middle">VCC</text>
+                                <text x="15" y="85" class="svg-text font-bold" fill="#10B981">10kΩ</text>
+                                <!-- V_OUT Probe -->
+                                <circle id="vout-probe" cx="550" cy="120" r="6" fill="#10B981" style="transition: fill 0.3s;" />
+                                <text id="vout-text" x="550" y="100" class="svg-text font-bold" fill="#10B981" text-anchor="middle" style="transition: fill 0.3s;">V_OUT = 1 (HIGH)</text>
+                                <path id="weft-2-top" class="cond-yarn" stroke="#94A3B8" d="M 50 240 Q 300 240 550 240" />
+                                <text x="100" y="225" class="svg-text font-bold">Cond. Weft 2 (Bridge)</text>
+                                <!-- Conductive Warps -->
+                                <path id="warp-1-top" class="cond-yarn" stroke="#94A3B8" d="M 200 240 L 200 140" />
+                                <text id="warp-1-txt" x="140" y="195" class="svg-text font-bold" fill="#7A8794">Warp 1</text>
+                                <path id="warp-2-top" class="cond-yarn" stroke="#3B82F6" d="M 400 360 L 400 260" />
+                                <text id="warp-2-txt" x="340" y="315" class="svg-text font-bold" fill="#7A8794">Warp 2</text>
+                                <!-- GND Symbol -->
+                                <path d="M 400 360 L 400 380 M 380 380 L 420 380 M 388 386 L 412 386 M 396 392 L 404 392" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                                <text x="435" y="390" class="svg-text font-bold" fill="#3B82F6">GND</text>
+                                <!-- Contact Sparks -->
+                                <circle id="glow-a-top" cx="200" cy="120" r="16" fill="#F97316" opacity="0" style="transition: all 0.6s ease; filter: blur(5px);" />
+                                <circle id="core-a-top" cx="200" cy="120" r="5" fill="#fff" opacity="0" style="transition: all 0.6s ease;" />
+                                <circle id="glow-b-top" cx="400" cy="240" r="16" fill="#F97316" opacity="0" style="transition: all 0.6s ease; filter: blur(5px);" />
+                                <circle id="core-b-top" cx="400" cy="240" r="5" fill="#fff" opacity="0" style="transition: all 0.6s ease;" />
+                            </svg>
+                        </div>
+                        <!-- BOTTOM VIEW -->
+                        <div class="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1 mt-2">Bottom Layer (Actuator View)</div>
+                        <div class="svg-container min-h-[250px]">
+                            <svg viewBox="0 0 600 420" style="width: 100%; height: 100%; overflow: visible; max-width: 700px; margin: 0 auto; display: block;">
+                                <style>
+                                    .lce-yarn-bot { fill: none; stroke: #CBD5E1; stroke-width: 24; stroke-linecap: round; opacity: 0.6; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+                                    .cond-yarn-ghost { fill: none; stroke: #94A3B8; stroke-width: 14; stroke-linecap: round; opacity: 0.15; }
+                                </style>
+                                <path id="lce-a-bot" class="lce-yarn-bot" d="M 200 40 Q 200 160 200 280" />
+                                <text x="140" y="60" class="svg-text font-bold">LCE A</text>
+                                <path id="lce-b-bot" class="lce-yarn-bot" d="M 400 160 Q 400 280 400 400" />
+                                <text x="340" y="180" class="svg-text font-bold">LCE B</text>
+                                <path id="fw1-bot" class="struct-weft" style="opacity:0.4;" d="M 50 80 Q 300 80 550 80" />
+                                <path id="fw2-bot" class="struct-weft" style="opacity:0.4;" d="M 50 160 Q 300 160 550 160" />
+                                <path id="fw3-bot" class="struct-weft" style="opacity:0.4;" d="M 50 200 Q 300 200 550 200" />
+                                <path id="fw4-bot" class="struct-weft" style="opacity:0.4;" d="M 50 280 Q 300 280 550 280" />
+                                <path id="fw5-bot" class="struct-weft" style="opacity:0.4;" d="M 50 320 Q 300 320 550 320" />
+                                <path id="fw6-bot" class="struct-weft" style="opacity:0.4;" d="M 50 360 Q 300 360 550 360" />
+                                <path class="cond-yarn-ghost" d="M 50 120 Q 300 120 550 120" />
+                                <path class="cond-yarn-ghost" d="M 50 240 Q 300 240 550 240" />
+                                <path id="warp-1-bot" class="cond-yarn-ghost" d="M 200 240 L 200 140" />
+                                <path id="warp-2-bot" class="cond-yarn-ghost" d="M 400 360 L 400 260" />
+                            </svg>
+                        </div>
+                        <!-- Legend -->
+                        <div class="flex gap-6 mt-6 justify-center flex-wrap">
+                            <div class="legend-item"><div class="legend-line" style="background:#CBD5E1;"></div>LCE (Cool)</div>
+                            <div class="legend-item"><div class="legend-line" style="background:#F97316"></div>LCE Heated</div>
+                            <div class="legend-item"><div class="legend-line" style="background:#10B981"></div>High Voltage (1)</div>
+                            <div class="legend-item"><div class="legend-line" style="background:#3B82F6"></div>Ground / Low (0)</div>
+                            <div class="legend-item"><div class="legend-line" style="background:#94A3B8"></div>Floating</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </nav>
 
-    <!-- Live View -->
-    <div id="view-live" class="p-4 md:p-8 block">
-        <header class="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row md:justify-between md:items-end border-b border-slate-200 dark:border-slate-800 pb-4 gap-4">
-            <div>
-                <h2 class="text-xl font-bold text-slate-800 dark:text-white">Structural Contact Simulation</h2>
-                <p class="text-slate-500 text-sm mt-1 font-medium">Orthogonal Conductive Yarn Interaction & 3D Spatial Tracking</p>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
-                    <span id="status-text" class="text-xs font-bold text-slate-500 uppercase tracking-wide">Sim Offline</span>
-                </div>
-                <button id="btn-connect" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-md transition-all active:scale-95">
-                    Start Simulation (BLE Fake)
-                </button>
-            </div>
-        </header>
-
-        <main class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- ========================================== -->
+        <!-- TAB 2: KNITTED STRUCTURE                   -->
+        <!-- ========================================== -->
+        <div id="tab-knit" class="tab-content">
+            <div class="flex flex-col xl:flex-row gap-8 items-center justify-center max-w-7xl mx-auto">
+                <!-- LEFT COLUMN: CONTROLS & EXPLANATION -->
+                <div class="w-full xl:w-4/12 max-w-xl flex flex-col gap-6">
+                    <div>
+                        <div class="text-xs font-bold text-purple-600 uppercase tracking-widest mb-2">Extended Topology</div>
+                        <h1 class="text-4xl font-extrabold text-zinc-900 mb-4 tracking-tight">Multi-Switch Array</h1>
+                        <p class="text-zinc-600 text-sm leading-relaxed mb-4">
+                            The logic is now fully procedural. The fabric has been extended horizontally to incorporate an array of independent tuck-stitch contact zones.
+                        </p>
+                        <p class="text-zinc-600 text-sm leading-relaxed mb-4">
+                            <b>The Mechanics:</b> Stretching the fabric horizontally activates all three switches simultaneously. The physics engine dynamically calculates the deformation mesh based on the distance to the nearest orange tuck stitch.
+                        </p>
+                    </div>
             
-            <!-- Left Column: Logic State & IMU Readout -->
-            <section class="lg:col-span-1 space-y-6">
-                <!-- Logic Gate Status -->
-                <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-center">
-                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6 w-full text-left border-b border-slate-100 dark:border-slate-800 pb-2">Hybrid Logic State</h3>
-                    
-                    <div id="logic-indicator" class="w-32 h-32 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-700 flex items-center justify-center mb-4 state-transition">
-                        <span id="logic-text" class="text-3xl font-black text-slate-400 font-mono tracking-widest">OFF</span>
-                    </div>
-                    
-                    <div class="w-full flex justify-between px-4 text-sm font-mono text-slate-500">
-                        <span>Circuit: <span id="circuit-status" class="font-bold text-slate-700 dark:text-slate-300">OPEN</span></span>
-                        <span>Out: <span id="logic-val" class="font-bold text-slate-700 dark:text-slate-300">0</span></span>
-                    </div>
-                </div>
-
-                <!-- IMU Data -->
-                <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 dark:border-slate-800 pb-2">IMU Orientation</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <div class="flex justify-between mb-1"><span class="text-slate-500 font-mono text-sm">Pitch (X)</span><span id="pitch-val" class="font-mono font-bold">0.0°</span></div>
-                            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                                <div id="bar-pitch" class="bg-indigo-500 h-2 rounded-full transition-all duration-100" style="width:50%; transform-origin: center;"></div>
-                            </div>
+                    <div class="card">
+                        <h3 class="font-bold text-zinc-900 text-lg mb-4">Array Stretch Simulator</h3>
+                        
+                        <div class="mb-8">
+                            <label for="stretchSlider" class="flex justify-between text-sm font-semibold text-zinc-700 mb-4">
+                                <span>Relaxed</span>
+                                <span class="text-purple-600">Stretched (Pulled)</span>
+                            </label>
+                            <input type="range" id="stretchSlider" min="0" max="1" step="0.01" value="0">
                         </div>
-                        <div>
-                            <div class="flex justify-between mb-1"><span class="text-slate-500 font-mono text-sm">Roll (Z)</span><span id="roll-val" class="font-mono font-bold">0.0°</span></div>
-                            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                                <div id="bar-roll" class="bg-fuchsia-500 h-2 rounded-full transition-all duration-100" style="width:50%;"></div>
+            
+                        <div class="bg-zinc-50 rounded-xl p-4 border border-zinc-200 flex flex-col gap-2">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-zinc-500 font-medium">Array Status:</span>
+                                <span id="statusVal" class="font-bold text-xl text-zinc-400 mono">OPEN (0,0,0)</span>
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
-
-            <!-- Right Column: 3D Visualizer -->
-            <section class="lg:col-span-2">
-                <div class="bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden h-full min-h-[400px] flex flex-col">
-                    <div class="absolute top-6 left-6 z-10 pointer-events-none">
-                        <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800 dark:text-white drop-shadow-md">
-                            <svg class="w-5 h-5 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path></svg>
-                            Fabric Structure Visualizer
-                        </h2>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Multi-layer woven structure with orthogonal conductive traces.</p>
+            
+                <!-- RIGHT COLUMN: INTERACTIVE CANVAS -->
+                <div class="w-full xl:w-8/12 flex justify-center items-center">
+                    <div class="bg-[#262626] p-4 rounded-3xl shadow-2xl border border-zinc-700 relative overflow-hidden" style="width: 100%; max-width: 900px; height: 500px;">
+                        <canvas id="knitCanvas" width="900" height="500" class="w-full h-full"></canvas>
                     </div>
-                    <canvas id="fabric-canvas" class="w-full flex-grow"></canvas>
                 </div>
-            </section>
-        </main>
-
-        <!-- Real-Time Trace -->
-        <section class="max-w-6xl mx-auto mt-6 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
-                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
-                Real-Time Logic Trace (Boolean Output)
-            </h2>
-            <div id="liveLogicChart" class="w-full h-[250px]"></div>
-        </section>
-
-    </div>
-
-    <!-- Analyzer View (Placeholder for future) -->
-    <div id="view-viewer" class="p-4 md:p-8 hidden">
-        <header class="max-w-6xl mx-auto mb-8 flex justify-between items-end border-b border-slate-200 dark:border-slate-800 pb-4">
-            <div>
-                <h2 class="text-2xl font-bold">Logic Analyzer</h2>
-                <p class="text-slate-500 text-sm mt-1">Review historical state changes and contact hysteresis.</p>
             </div>
-        </header>
-        <main class="max-w-6xl mx-auto text-center py-20 text-slate-500 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
-            <svg class="w-16 h-16 mx-auto mb-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-            <p>Analyzer view is ready for CSV data ingestion in future hardware revisions.</p>
-        </main>
-    </div>
+        </div>
 
+    </main>
+
+    <!-- ========================================== -->
+    <!-- SCRIPTS                                    -->
+    <!-- ========================================== -->
     <script>
-        // --- THEME & UTILS ---
-        function getChartColors() {
-            const isDark = document.documentElement.classList.contains('dark');
+        // --- Navigation Logic ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+
+            // Force canvas re-render if switching to Knit tab
+            if(tabId === 'tab-knit') knitSim.render();
+        }
+
+        // --- ADMIRE Woven Logic Namespace ---
+        const admireSim = (() => {
+            let stateA = false, stateB = false;
+            const C_VCC = '#10B981', C_GND = '#3B82F6', C_OFF = '#94A3B8', C_LCE = '#F97316';
+            
+            function getShadow(color) { return color === C_VCC ? 'drop-shadow(0 0 5px rgba(16, 185, 129, 0.4))' : 'none'; }
+            function lerpColor(a, b, t) {
+                const ah = a.replace('#',''), bh = b.replace('#','');
+                const ar = parseInt(ah.slice(0,2),16), ag = parseInt(ah.slice(2,4),16), ab = parseInt(ah.slice(4,6),16);
+                const br = parseInt(bh.slice(0,2),16), bg = parseInt(bh.slice(2,4),16), bb = parseInt(bh.slice(4,6),16);
+                return '#' + Math.round(ar + (br - ar) * t).toString(16).padStart(2,'0') + 
+                             Math.round(ag + (bg - ag) * t).toString(16).padStart(2,'0') + 
+                             Math.round(ab + (bb - ab) * t).toString(16).padStart(2,'0');
+            }
+
+            function animatePair2D(which, toHot) {
+                const w1Id = which === 'A' ? 'w1_2d' : 'w2_2d', w1bId = which === 'A' ? 'w1b_2d' : 'w2b_2d';
+                const lceId = which === 'A' ? 'lceALine_2d' : 'lceBLine_2d', glowId = which === 'A' ? 'lceAGlow_2d' : 'lceBGlow_2d';
+                const dotId = which === 'A' ? 'lceAContact_2d' : 'lceBContact_2d', lblId = which === 'A' ? 'lceALbl_2d' : 'lceBLbl_2d';
+                const cx = which === 'A' ? 220 : 340, coolW1 = which === 'A' ? 200 : 320, coolW1b = which === 'A' ? 240 : 360;
+                const hotW1 = cx - 2, hotW1b = cx + 2;
+                const fromW1 = toHot ? coolW1 : hotW1, fromW1b = toHot ? coolW1b : hotW1b;
+                const toW1 = toHot ? hotW1 : coolW1, toW1b = toHot ? hotW1b : coolW1b;
+                const dur = 600, start = performance.now();
+
+                function step(now) {
+                    const t = Math.min(1, (now - start) / dur);
+                    const e = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+                    const curW1 = fromW1 + (toW1 - fromW1) * e, curW1b = fromW1b + (toW1b - fromW1b) * e;
+
+                    document.getElementById(w1Id).setAttribute('x1', curW1.toFixed(1));
+                    document.getElementById(w1Id).setAttribute('x2', curW1.toFixed(1));
+                    document.getElementById(w1bId).setAttribute('x1', curW1b.toFixed(1));
+                    document.getElementById(w1bId).setAttribute('x2', curW1b.toFixed(1));
+
+                    if (which === 'A') {
+                        document.getElementById('weftLeft_2d').setAttribute('x2', curW1.toFixed(1));
+                        document.getElementById('weftBridge_2d').setAttribute('x1', curW1b.toFixed(1));
+                    } else {
+                        document.getElementById('weftBridge_2d').setAttribute('x2', curW1.toFixed(1));
+                        document.getElementById('weftRight_2d').setAttribute('x1', curW1b.toFixed(1));
+                    }
+
+                    const lceEl = document.getElementById(lceId), glowEl = document.getElementById(glowId);
+                    const x1gap = curW1 + 4, x2gap = curW1b - 4;
+                    lceEl.setAttribute('x1', x1gap.toFixed(1)); lceEl.setAttribute('x2', x2gap.toFixed(1));
+                    glowEl.setAttribute('x1', x1gap.toFixed(1)); glowEl.setAttribute('x2', x2gap.toFixed(1));
+
+                    const heatAlpha = toHot ? e : 1 - e;
+                    lceEl.setAttribute('stroke', toHot ? lerpColor('#CBD5E1', '#F97316', e) : lerpColor('#F97316', '#CBD5E1', e));
+                    lceEl.setAttribute('stroke-dasharray', toHot ? `${(4 - 3*e).toFixed(1)} ${(3 - 2*e).toFixed(1)}` : `${(1 + 3*(1-e)).toFixed(1)} ${(1 + 2*(1-e)).toFixed(1)}`);
+                    glowEl.setAttribute('opacity', (heatAlpha * 0.7).toFixed(2));
+                    document.getElementById(dotId).setAttribute('opacity', (toHot ? e : 1-e).toFixed(2));
+                    document.getElementById(lblId).setAttribute('fill', toHot ? lerpColor('#94A3B8','#F97316',e) : lerpColor('#F97316','#94A3B8',e));
+
+                    if (t < 1) requestAnimationFrame(step);
+                }
+                requestAnimationFrame(step);
+            }
+
+            function updateLogic() {
+                const outBox = document.getElementById('nand-output'), outVal = document.getElementById('nand-val');
+                const outDesc = document.getElementById('nand-desc'), voutProbe = document.getElementById('vout-probe');
+                const voutText = document.getElementById('vout-text');
+                const isNandZero = (stateA && stateB);
+
+                if (isNandZero) {
+                    outBox.className = 'output-box active-low'; outVal.innerText = '0';
+                    outDesc.innerText = 'Both heaters active. Circuit is closed to ground (Output 0).';
+                    if (voutProbe) { voutProbe.setAttribute('fill', C_GND); voutText.setAttribute('fill', C_GND); voutText.textContent = 'V_OUT = 0 (LOW)'; }
+                } else {
+                    outBox.className = 'output-box active-high'; outVal.innerText = '1';
+                    outDesc.innerText = 'High voltage maintained. Circuit is open (Output 1).';
+                    if (voutProbe) { voutProbe.setAttribute('fill', C_VCC); voutText.setAttribute('fill', C_VCC); voutText.textContent = 'V_OUT = 1 (HIGH)'; }
+                }
+
+                const activeId = `tt-${stateA ? 1 : 0}${stateB ? 1 : 0}`;
+                ['tt-00', 'tt-10', 'tt-01', 'tt-11'].forEach(id => {
+                    const row = document.getElementById(id);
+                    if (id === activeId) row.classList.add('bg-blue-50', 'shadow-inner');
+                    else row.classList.remove('bg-blue-50', 'shadow-inner');
+                });
+            }
+
+            function renderView2D() {
+                const out = !(stateA && stateB);
+                let cOut = out ? C_VCC : C_GND, cMid = (stateA && stateB) ? C_GND : (stateA ? C_VCC : (stateB ? C_GND : C_OFF)), cGnd = C_GND; 
+                document.getElementById('weftLeft_2d').style.stroke = cOut; document.getElementById('weftLeft_2d').style.filter = getShadow(cOut);
+                document.getElementById('w1_2d').style.stroke = cOut; document.getElementById('outStem_2d').style.stroke = cOut;
+                document.getElementById('outArr1_2d').style.stroke = cOut; document.getElementById('outLabel_2d').style.fill = cOut;
+                
+                const outDot = document.getElementById('outDot_2d');
+                if (out) { outDot.style.fill = C_VCC; outDot.style.stroke = C_VCC; outDot.style.filter = getShadow(C_VCC); } 
+                else { outDot.style.fill = '#FAFAFA'; outDot.style.stroke = C_GND; outDot.style.filter = 'none'; }
+
+                document.getElementById('w1b_2d').style.stroke = cMid; document.getElementById('weftBridge_2d').style.stroke = cMid;
+                document.getElementById('weftBridge_2d').style.filter = getShadow(cMid); document.getElementById('w2_2d').style.stroke = cMid;
+                document.getElementById('w2b_2d').style.stroke = cGnd; document.getElementById('weftRight_2d').style.stroke = cGnd;
+                document.getElementById('weftRight_2d').style.filter = getShadow(cGnd);
+            }
+
+            function renderViews3D() {
+                const w1 = document.getElementById('weft-1-top'), w2 = document.getElementById('weft-2-top');
+                const wp1 = document.getElementById('warp-1-top'), wp2 = document.getElementById('warp-2-top');
+
+                if (stateA && stateB) { w1.setAttribute('stroke', C_GND); wp1.setAttribute('stroke', C_GND); w2.setAttribute('stroke', C_GND); wp2.setAttribute('stroke', C_GND); } 
+                else if (stateA && !stateB) { w1.setAttribute('stroke', C_VCC); wp1.setAttribute('stroke', C_VCC); w2.setAttribute('stroke', C_VCC); wp2.setAttribute('stroke', C_GND); } 
+                else if (!stateA && stateB) { w1.setAttribute('stroke', C_VCC); wp1.setAttribute('stroke', C_GND); w2.setAttribute('stroke', C_GND); wp2.setAttribute('stroke', C_GND); } 
+                else { w1.setAttribute('stroke', C_VCC); wp1.setAttribute('stroke', C_OFF); w2.setAttribute('stroke', C_OFF); wp2.setAttribute('stroke', C_GND); }
+
+                const fw2_t = document.getElementById('fw2-top'), fw2_b = document.getElementById('fw2-bot');
+                const wp1_t = document.getElementById('warp-1-top'), wp1_b = document.getElementById('warp-1-bot');
+                const lceA_t = document.getElementById('lce-a-top'), lceA_b = document.getElementById('lce-a-bot');
+                const glowA = document.getElementById('glow-a-top'), coreA = document.getElementById('core-a-top');
+
+                const fw4_t = document.getElementById('fw4-top'), fw4_b = document.getElementById('fw4-bot');
+                const wp2_t = document.getElementById('warp-2-top'), wp2_b = document.getElementById('warp-2-bot');
+                const lceB_t = document.getElementById('lce-b-top'), lceB_b = document.getElementById('lce-b-bot');
+                const glowB = document.getElementById('glow-b-top'), coreB = document.getElementById('core-b-top');
+
+                if (stateA) {
+                    wp1_t.setAttribute('d', 'M 200 240 L 200 120'); fw2_t.setAttribute('d', 'M 50 160 Q 200 130 550 160'); 
+                    lceA_t.setAttribute('d', 'M 200 60 Q 200 160 200 260'); glowA.style.opacity = '0.7'; coreA.style.opacity = '1'; 
+                    wp1_b.setAttribute('d', 'M 200 240 L 200 120'); fw2_b.setAttribute('d', 'M 50 160 Q 200 130 550 160');
+                    lceA_b.setAttribute('d', 'M 200 60 Q 200 160 200 260'); lceA_b.setAttribute('stroke', C_LCE); 
+                    lceA_b.style.opacity = '1'; lceA_b.style.filter = `drop-shadow(0 0 10px ${C_LCE})`;
+                } else {
+                    wp1_t.setAttribute('d', 'M 200 240 L 200 140'); fw2_t.setAttribute('d', 'M 50 160 Q 300 160 550 160');
+                    lceA_t.setAttribute('d', 'M 200 40 Q 200 160 200 280'); glowA.style.opacity = '0'; coreA.style.opacity = '0';
+                    wp1_b.setAttribute('d', 'M 200 240 L 200 140'); fw2_b.setAttribute('d', 'M 50 160 Q 300 160 550 160');
+                    lceA_b.setAttribute('d', 'M 200 40 Q 200 160 200 280'); lceA_b.setAttribute('stroke', '#CBD5E1');
+                    lceA_b.style.opacity = '0.6'; lceA_b.style.filter = 'none';
+                }
+
+                if (stateB) {
+                    wp2_t.setAttribute('d', 'M 400 360 L 400 240'); fw4_t.setAttribute('d', 'M 50 280 Q 400 250 550 280');
+                    lceB_t.setAttribute('d', 'M 400 180 Q 400 280 400 380'); glowB.style.opacity = '0.7'; coreB.style.opacity = '1'; 
+                    wp2_b.setAttribute('d', 'M 400 360 L 400 240'); fw4_b.setAttribute('d', 'M 50 280 Q 400 250 550 280');
+                    lceB_b.setAttribute('d', 'M 400 180 Q 400 280 400 380'); lceB_b.setAttribute('stroke', C_LCE); 
+                    lceB_b.style.opacity = '1'; lceB_b.style.filter = `drop-shadow(0 0 10px ${C_LCE})`;
+                } else {
+                    wp2_t.setAttribute('d', 'M 400 360 L 400 260'); fw4_t.setAttribute('d', 'M 50 280 Q 300 280 550 280'); 
+                    lceB_t.setAttribute('d', 'M 400 160 Q 400 280 400 400'); glowB.style.opacity = '0'; coreB.style.opacity = '0';
+                    wp2_b.setAttribute('d', 'M 400 360 L 400 260'); fw4_b.setAttribute('d', 'M 50 280 Q 300 280 550 280');
+                    lceB_b.setAttribute('d', 'M 400 160 Q 400 280 400 400'); lceB_b.setAttribute('stroke', '#CBD5E1');
+                    lceB_b.style.opacity = '0.6'; lceB_b.style.filter = 'none';
+                }
+            }
+
             return {
-                bg: 'rgba(0,0,0,0)',
-                text: isDark ? '#f8fafc' : '#1e293b',
-                grid: isDark ? '#334155' : '#e2e8f0',
-                primary: isDark ? '#818cf8' : '#4f46e5',
-                fill: isDark ? 'rgba(129, 140, 248, 0.2)' : 'rgba(79, 70, 229, 0.2)'
+                toggle: (heaterId) => {
+                    if (heaterId === 'A') {
+                        stateA = !stateA;
+                        document.getElementById('btn-heater-a').classList.toggle('active-heater', stateA);
+                        document.getElementById('val-a').innerText = stateA ? '1 (Hot)' : '0 (Cool)';
+                        document.getElementById('val-a').style.color = stateA ? '#C2410C' : '#27272a';
+                        animatePair2D('A', stateA);
+                    } else if (heaterId === 'B') {
+                        stateB = !stateB;
+                        document.getElementById('btn-heater-b').classList.toggle('active-heater', stateB);
+                        document.getElementById('val-b').innerText = stateB ? '1 (Hot)' : '0 (Cool)';
+                        document.getElementById('val-b').style.color = stateB ? '#C2410C' : '#27272a';
+                        animatePair2D('B', stateB);
+                    }
+                    updateLogic(); renderViews3D(); renderView2D();
+                },
+                init: () => { renderView2D(); renderViews3D(); updateLogic(); }
             };
-        }
+        })();
 
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const darkIcon = document.getElementById('theme-icon-dark');
-        const lightIcon = document.getElementById('theme-icon-light');
+        // Global proxy for button onclick
+        window.toggleHeater = admireSim.toggle;
 
-        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-            lightIcon.classList.remove('hidden'); darkIcon.classList.add('hidden');
-        } else {
-            document.documentElement.classList.remove('dark');
-            lightIcon.classList.add('hidden'); darkIcon.classList.remove('hidden');
-        }
+        // --- Knitted Array Logic Namespace ---
+        const knitSim = (() => {
+            const canvas = document.getElementById('knitCanvas');
+            const ctx = canvas.getContext('2d');
+            const slider = document.getElementById('stretchSlider');
+            const statusVal = document.getElementById('statusVal');
 
-        themeToggleBtn.addEventListener('click', function() {
-            darkIcon.classList.toggle('hidden');
-            lightIcon.classList.toggle('hidden');
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('color-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+            const C_BG = '#262626', C_GREEN = '#A3E635', C_PURPLE = '#A855F7', C_ORANGE = '#F59E0B'; 
+            const COLS = 25, ROWS = 8, CONTACT_COLS = [4, 12, 20]; 
+            let stretch = 0; 
+
+            function updateUI() {
+                if (stretch > 0.85) {
+                    statusVal.textContent = "CLOSED (1,1,1)";
+                    statusVal.className = "font-bold text-xl text-purple-500 mono glow-text";
+                } else {
+                    statusVal.textContent = "OPEN (0,0,0)";
+                    statusVal.className = "font-bold text-xl text-zinc-400 mono";
+                }
+            }
+
+            function getX(col, stretch) {
+                let baseW = 20 + (stretch * 12), totalW = baseW * (COLS - 1);
+                let startX = (canvas.width - totalW) / 2; return startX + (col * baseW);
+            }
+
+            function getY(row, col, stretch) {
+                let baseH = 55 - (stretch * 18), topPadding = 60 + (stretch * 20), baseY = topPadding + (row * baseH);
+                let targetCenterY = topPadding + (3.5 * baseH); 
+                let nearestContact = CONTACT_COLS.reduce((a, b) => Math.abs(b - col) < Math.abs(a - col) ? b : a);
+                let colInfluence = Math.max(0, 1 - (Math.abs(col - nearestContact) * 0.4)); 
+                let finalY = baseY;
+                if (stretch > 0) {
+                    if (row === 2.5) finalY = baseY + ((targetCenterY - baseY) * colInfluence * stretch);
+                    else if (row === 4.5) finalY = baseY - ((baseY - targetCenterY) * colInfluence * stretch);
+                    else if (row === 3 || row === 4) {
+                        let midTarget = (row === 3) ? (targetCenterY - 5) : (targetCenterY + 5);
+                        finalY = baseY + ((midTarget - baseY) * colInfluence * stretch);
+                    } else if (row === 1 || row === 6) {
+                        finalY = baseY + ((row === 1 ? 1 : -1) * 10 * colInfluence * stretch);
+                    }
+                }
+                return finalY;
+            }
+
+            function drawCourse(row, color, stretch) {
+                ctx.strokeStyle = color; ctx.lineWidth = 8 - (stretch * 1.5); 
+                ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 3;
+                ctx.beginPath();
+                let W = 20 + (stretch * 12), H = 55 - (stretch * 18), loopH = H * 0.45; 
+                let startX = getX(0, stretch) - W, startY = getY(row, 0, stretch) - loopH;
+                ctx.moveTo(startX, startY);
+                for (let c = 0; c < COLS; c++) {
+                    let cx = getX(c, stretch), cy = getY(row, c, stretch);
+                    ctx.bezierCurveTo(cx - W*0.35, cy + loopH, cx - W*0.1, cy + loopH*1.2, cx, cy + loopH*1.2);
+                    ctx.bezierCurveTo(cx + W*0.1, cy + loopH*1.2, cx + W*0.35, cy + loopH, cx + W*0.5, cy - loopH*0.8);
+                }
+                ctx.stroke(); ctx.shadowColor = 'transparent';
+            }
+
+            function drawSmoothWave(points) {
+                ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 0; i < points.length - 1; i++) {
+                    let p0 = points[i], p1 = points[i + 1], distX = (p1.x - p0.x) * 0.5; 
+                    ctx.bezierCurveTo(p0.x + distX, p0.y, p1.x - distX, p1.y, p1.x, p1.y);
+                }
+                ctx.stroke();
+            }
+
+            function drawPurpleOverlay(stretch) {
+                ctx.strokeStyle = C_PURPLE; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.shadowColor = 'rgba(168, 85, 247, 0.8)'; ctx.shadowBlur = 8;
+                let topPoints = [], botPoints = [];
+                for (let c = 0; c < COLS; c += 2) {
+                    let isPeak = !CONTACT_COLS.includes(c) && (c % 4 !== 0); 
+                    topPoints.push({x: getX(c, stretch), y: getY(isPeak ? 1.5 : 2.5, c, stretch)});
+                    botPoints.push({x: getX(c, stretch), y: getY(isPeak ? 5.5 : 4.5, c, stretch)});
+                }
+                drawSmoothWave(topPoints); drawSmoothWave(botPoints);
+                ctx.shadowColor = 'transparent';
+            }
+
+            function drawTuckStitches(stretch) {
+                ctx.strokeStyle = C_ORANGE; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 4;
+                CONTACT_COLS.forEach(col => {
+                    let topY = getY(2.5, col, stretch), botY = getY(4.5, col, stretch), cx = getX(col, stretch);
+                    let W = 20 + (stretch * 12), H = 55 - (stretch * 18), loopW = W * 0.4 * (1 + stretch * 0.5); 
+                    ctx.beginPath(); ctx.moveTo(cx - loopW, topY - H*0.2);
+                    ctx.bezierCurveTo(cx - loopW*0.6, botY, cx, botY + H*0.35, cx, botY + H*0.35);
+                    ctx.bezierCurveTo(cx, botY + H*0.35, cx + loopW*0.6, botY, cx + loopW, topY - H*0.2);
+                    ctx.stroke();
+                });
+                ctx.shadowColor = 'transparent';
+            }
+
+            function drawSparks(stretch) {
+                if (stretch <= 0.85) return;
+                CONTACT_COLS.forEach(col => {
+                    let cx = getX(col, stretch), cy = (getY(2.5, col, stretch) + getY(4.5, col, stretch)) / 2;
+                    let grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 40);
+                    grad.addColorStop(0, 'rgba(168, 85, 247, 0.6)'); grad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+                    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.fill();
+                });
+            }
+
+            function render() {
+                // Failsafe for hidden canvas dimensions
+                if(canvas.width === 0 || canvas.height === 0) {
+                    canvas.width = 900; canvas.height = 500;
+                }
+                ctx.fillStyle = C_BG; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                for (let r = 0; r < ROWS; r++) drawCourse(r, C_GREEN, stretch);
+                drawPurpleOverlay(stretch); drawTuckStitches(stretch); drawSparks(stretch);
+            }
+
+            slider.addEventListener('input', (e) => { stretch = parseFloat(e.target.value); updateUI(); render(); });
             
-            const colors = getChartColors();
-            const layoutUpdate = {
-                'title.font.color': colors.text,
-                'xaxis.color': colors.text,
-                'yaxis.color': colors.text,
-                'xaxis.gridcolor': colors.grid,
-                'yaxis.gridcolor': colors.grid
-            };
-            if (document.getElementById('liveLogicChart').data) {
-                Plotly.relayout('liveLogicChart', layoutUpdate);
-                Plotly.restyle('liveLogicChart', { 'line.color': colors.primary, 'fillcolor': colors.fill }, [0]);
-            }
-        });
+            return { init: () => { render(); }, render: render };
+        })();
 
-        // --- TAB NAVIGATION ---
-        const tabLive = document.getElementById('tab-live');
-        const tabViewer = document.getElementById('tab-viewer');
-        const viewLive = document.getElementById('view-live');
-        const viewViewer = document.getElementById('view-viewer');
-
-        function switchTab(activeTab) {
-            if (activeTab === 'live') {
-                viewLive.classList.remove('hidden'); viewViewer.classList.add('hidden');
-                tabLive.className = "px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-500 transition-colors";
-                tabViewer.className = "px-4 py-2 text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors";
-            } else {
-                viewLive.classList.add('hidden'); viewViewer.classList.remove('hidden');
-                tabViewer.className = "px-4 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-500 transition-colors";
-                tabLive.className = "px-4 py-2 text-sm font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors";
-            }
-        }
-        tabLive.addEventListener('click', () => switchTab('live'));
-        tabViewer.addEventListener('click', () => switchTab('viewer'));
-
-        // --- CHART SETUP ---
-        let chartDataX = [];
-        let chartDataY = [];
-        const MAX_POINTS = 100;
-        let chartCounter = 0;
-
-        function initChart() {
-            const colors = getChartColors();
-            let trace = {
-                x: chartDataX, y: chartDataY,
-                mode: 'lines', name: 'Contact State',
-                line: { shape: 'hv', width: 3, color: colors.primary }, 
-                fill: 'tozeroy', fillcolor: colors.fill
-            };
-            let layout = {
-                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-                xaxis: {title: 'Time (Samples)', color: colors.text, gridcolor: colors.grid, showgrid: false},
-                yaxis: {title: 'Binary State', color: colors.text, gridcolor: colors.grid, range: [-0.2, 1.2], tickvals: [0, 1], ticktext: ['OFF (0)', 'ON (1)']},
-                margin: {t: 10, b: 40, l: 60, r: 20},
-                showlegend: false
-            };
-            Plotly.newPlot('liveLogicChart', [trace], layout, {responsive: true});
-        }
-        initChart();
-
-        // --- THREE.JS TEXTILE VISUALIZER SETUP ---
-        const canvas = document.getElementById('fabric-canvas');
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / 400, 0.1, 100);
-        camera.position.set(5, 4, 6);
-        camera.lookAt(0, 0, 0);
-
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        dirLight.position.set(5, 10, 5);
-        scene.add(dirLight);
-
-        // Geometries (Highly segmented for fabric bending)
-        const planeGeoBottom = new THREE.PlaneGeometry(6, 6, 40, 40);
-        const planeGeoTop = new THREE.PlaneGeometry(6, 6, 40, 40);
-        
-        const wireGeoX = new THREE.CylinderGeometry(0.04, 0.04, 6, 8, 40);
-        const wireGeoZ = new THREE.CylinderGeometry(0.04, 0.04, 6, 8, 40);
-
-        // Materials
-        const matBottom = new THREE.MeshPhysicalMaterial({ color: 0x334155, roughness: 0.9, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
-        const matBottomWireframe = new THREE.MeshBasicMaterial({ color: 0x0f172a, wireframe: true, transparent: true, opacity: 0.2 });
-        
-        const matTop = new THREE.MeshPhysicalMaterial({ color: 0x475569, roughness: 0.9, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
-        const matTopWireframe = new THREE.MeshBasicMaterial({ color: 0x1e293b, wireframe: true, transparent: true, opacity: 0.3 });
-        
-        const wireMatCopper = new THREE.MeshStandardMaterial({ color: 0xd97757, metalness: 0.8, roughness: 0.3 });
-        const wireMatSilver = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 });
-
-        // --- BOTTOM LAYER (Stabilized & Wavy) ---
-        const bottomLayer = new THREE.Group();
-        
-        // Add static natural wrinkles to the bottom plane
-        const posB = planeGeoBottom.attributes.position;
-        for(let i=0; i<posB.count; i++) {
-            const x = posB.getX(i);
-            const y = posB.getY(i);
-            posB.setZ(i, Math.sin(x * 1.5) * Math.cos(y * 1.5) * 0.05); // Fabric wrinkles
-        }
-        planeGeoBottom.computeVertexNormals();
-
-        const bottomMesh = new THREE.Mesh(planeGeoBottom, matBottom);
-        bottomMesh.add(new THREE.Mesh(planeGeoBottom, matBottomWireframe)); // Woven effect
-        bottomMesh.rotation.x = -Math.PI / 2;
-        
-        // Bottom Conductive Wire (Runs along X-axis)
-        const posBW = wireGeoX.attributes.position;
-        for(let i=0; i<posBW.count; i++) {
-            const bx = posBW.getX(i); 
-            const by = posBW.getY(i); // This represents the length due to default cylinder setup
-            const bz = posBW.getZ(i); 
-            // Match the plane's wrinkles perfectly
-            posBW.setX(i, bx + Math.sin(by * 1.5) * Math.cos(0) * 0.05); 
-        }
-        wireGeoX.computeVertexNormals();
-        
-        const bottomWire = new THREE.Mesh(wireGeoX, wireMatSilver);
-        bottomWire.rotation.z = Math.PI / 2;
-        bottomWire.position.y = 0.04; // Resting on the fabric
-        
-        bottomLayer.add(bottomMesh);
-        bottomLayer.add(bottomWire);
-        scene.add(bottomLayer);
-
-        // --- TOP LAYER (Dynamic Stretch & Dip) ---
-        const topLayer = new THREE.Group();
-        topLayer.position.y = 0.8; // Baseline gap
-
-        // Save base coordinates to compute stretch each frame
-        const posT = planeGeoTop.attributes.position;
-        const topBaseX = new Float32Array(posT.count);
-        const topBaseY = new Float32Array(posT.count);
-        for(let i=0; i<posT.count; i++) {
-            topBaseX[i] = posT.getX(i);
-            topBaseY[i] = posT.getY(i);
-        }
-
-        const topMesh = new THREE.Mesh(planeGeoTop, matTop);
-        topMesh.add(new THREE.Mesh(planeGeoTop, matTopWireframe)); // Woven effect
-        topMesh.rotation.x = -Math.PI / 2;
-
-        // Save top wire base coordinates
-        const posTW = wireGeoZ.attributes.position;
-        const twBaseX = new Float32Array(posTW.count);
-        const twBaseY = new Float32Array(posTW.count);
-        const twBaseZ = new Float32Array(posTW.count);
-        for(let i=0; i<posTW.count; i++) {
-            twBaseX[i] = posTW.getX(i);
-            twBaseY[i] = posTW.getY(i);
-            twBaseZ[i] = posTW.getZ(i);
-        }
-
-        const topWire = new THREE.Mesh(wireGeoZ, wireMatCopper);
-        topWire.rotation.x = Math.PI / 2; // Runs along Z-axis
-        topWire.position.y = -0.04; // Below top fabric
-
-        topLayer.add(topMesh);
-        topLayer.add(topWire);
-        scene.add(topLayer);
-
-        // --- GLOW EFFECT ---
-        const glowGeo = new THREE.SphereGeometry(0.15, 16, 16);
-        const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0 });
-        const contactGlow = new THREE.Mesh(glowGeo, glowMaterial);
-        contactGlow.position.y = 0.05; // Ground level contact point
-        scene.add(contactGlow);
-
-        const contactLight = new THREE.PointLight(0xef4444, 0, 3);
-        contactLight.position.set(0, 0.1, 0);
-        scene.add(contactLight);
-
-        // Resize handler
-        window.addEventListener('resize', () => {
-            const width = canvas.clientWidth;
-            renderer.setSize(width, 400, false);
-            camera.aspect = width / 400;
-            camera.updateProjectionMatrix();
-        });
-        renderer.setSize(canvas.clientWidth, 400, false);
-
-        // --- ANIMATION / DATA LOGIC ---
-        let currentPitch = 0, currentRoll = 0;
-        let targetPitch = 0, targetRoll = 0;
-        let isContact = false;
-        
-        let time = 0;
-        let dipAmount = 0;
-        let stretchAmount = 1.0;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            time += 0.05;
-
-            // Sway Camera with IMU (Bottom layer stays stable!)
-            currentPitch += (targetPitch - currentPitch) * 0.05;
-            currentRoll += (targetRoll - currentRoll) * 0.05;
-            camera.position.x = 5 + currentRoll * 0.04;
-            camera.position.y = 4 + currentPitch * 0.04;
-            camera.lookAt(0, 0, 0);
-
-            // Animate Top Fabric Dip & Stretch
-            const targetDip = isContact ? 0.7 : 0.0;     // Dips down by 0.7 units to touch
-            const targetStretch = isContact ? 1.15 : 1.0; // Stretches outwards by 15%
-            dipAmount += (targetDip - dipAmount) * 0.1;
-            stretchAmount += (targetStretch - stretchAmount) * 0.1;
-
-            // 1. Update Top Plane Vertices
-            for (let i = 0; i < posT.count; i++) {
-                const bx = topBaseX[i];
-                const by = topBaseY[i];
-                
-                // Scale outward
-                const x = bx * stretchAmount;
-                const y = by * stretchAmount;
-                posT.setX(i, x);
-                posT.setY(i, y);
-                
-                // Gaussian Bell Curve for dipping the center smoothly
-                const dist = Math.sqrt(x*x + y*y);
-                const influence = Math.exp(-(dist * dist) / 4); 
-                
-                // Dynamic breathing wrinkles
-                const wave = Math.sin(x * 1.5 + time) * Math.cos(y * 1.5 + time * 0.8) * 0.06;
-                
-                posT.setZ(i, wave - (dipAmount * influence));
-            }
-            planeGeoTop.computeVertexNormals();
-            posT.needsUpdate = true;
-
-            // 2. Update Top Wire Vertices to perfectly match the fabric
-            for(let i = 0; i < posTW.count; i++) {
-                const bx = twBaseX[i]; // Cross-section radius
-                const by = twBaseY[i]; // Length of cylinder
-                const bz = twBaseZ[i]; // Cross-section radius
-
-                // Stretch length
-                const planeY = by * stretchAmount; 
-                const planeX = bx;
-                
-                const dist = Math.abs(planeY);
-                const influence = Math.exp(-(dist * dist) / 4);
-                const wave = Math.sin(planeX * 1.5 + time) * Math.cos(planeY * 1.5 + time * 0.8) * 0.06;
-
-                posTW.setY(i, planeY); 
-                posTW.setZ(i, bz + wave - (dipAmount * influence));
-            }
-            wireGeoZ.computeVertexNormals();
-            posTW.needsUpdate = true;
-
-            // Animate Glow Effect
-            if (isContact) {
-                const pulse = 0.7 + Math.sin(time * 4) * 0.3;
-                glowMaterial.opacity = pulse;
-                contactLight.intensity = pulse * 2;
-                contactGlow.scale.setScalar(1 + Math.sin(time * 4) * 0.1);
-            } else {
-                glowMaterial.opacity -= glowMaterial.opacity * 0.2;
-                contactLight.intensity -= contactLight.intensity * 0.2;
-                contactGlow.scale.setScalar(1);
-            }
-
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        // --- FAKE BLE DATA SIMULATION ---
-        let simInterval = null;
-        let simTime = 0;
-
-        function processIncomingData(pitch, roll, contactState) {
-            targetPitch = pitch;
-            targetRoll = roll;
-            isContact = (contactState === 1);
-
-            document.getElementById('pitch-val').textContent = pitch.toFixed(1) + '°';
-            document.getElementById('roll-val').textContent = roll.toFixed(1) + '°';
-            
-            const mapRange = (val) => Math.max(0, Math.min(100, (val + 90) / 180 * 100));
-            document.getElementById('bar-pitch').style.width = mapRange(pitch) + '%';
-            document.getElementById('bar-roll').style.width = mapRange(roll) + '%';
-
-            const indicator = document.getElementById('logic-indicator');
-            const logicText = document.getElementById('logic-text');
-            const circuitStatus = document.getElementById('circuit-status');
-            const logicVal = document.getElementById('logic-val');
-
-            if (isContact) {
-                indicator.classList.remove('border-slate-300', 'dark:border-slate-700', 'bg-slate-100', 'dark:bg-slate-800');
-                indicator.classList.add('glow-active', 'bg-red-500/10');
-                logicText.textContent = "ON";
-                logicText.classList.remove('text-slate-400');
-                logicText.classList.add('text-red-500');
-                circuitStatus.textContent = "CLOSED (Contact)";
-                circuitStatus.className = "font-bold text-red-500";
-                logicVal.textContent = "1";
-                logicVal.className = "font-bold text-red-500";
-            } else {
-                indicator.classList.add('border-slate-300', 'dark:border-slate-700', 'bg-slate-100', 'dark:bg-slate-800');
-                indicator.classList.remove('glow-active', 'bg-red-500/10');
-                logicText.textContent = "OFF";
-                logicText.classList.add('text-slate-400');
-                logicText.classList.remove('text-red-500');
-                circuitStatus.textContent = "OPEN (Separated)";
-                circuitStatus.className = "font-bold text-slate-500 dark:text-slate-400";
-                logicVal.textContent = "0";
-                logicVal.className = "font-bold text-slate-500 dark:text-slate-400";
-            }
-
-            chartCounter++;
-            chartDataX.push(chartCounter);
-            chartDataY.push(contactState);
-
-            if (chartDataX.length > MAX_POINTS) {
-                chartDataX.shift();
-                chartDataY.shift();
-            }
-
-            Plotly.update('liveLogicChart', { x: [chartDataX], y: [chartDataY] });
-        }
-
-        function runSimulationTick() {
-            simTime += 0.1;
-            
-            const p = Math.sin(simTime * 0.5) * 15 + Math.sin(simTime * 0.2) * 5;
-            const r = Math.cos(simTime * 0.4) * 10;
-            
-            const threshold = 0.5;
-            const analogPressure = Math.sin(simTime * 0.8) * Math.cos(simTime * 0.3);
-            const c = analogPressure > threshold ? 1 : 0;
-
-            processIncomingData(p, r, c);
-        }
-
-        const btnConnect = document.getElementById('btn-connect');
-        
-        btnConnect.addEventListener('click', () => {
-            if (simInterval) {
-                clearInterval(simInterval);
-                simInterval = null;
-                btnConnect.textContent = "Start Simulation (BLE Fake)";
-                btnConnect.classList.remove('bg-red-500', 'hover:bg-red-600');
-                btnConnect.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
-                
-                document.getElementById('status-text').textContent = 'SIM OFFLINE';
-                document.getElementById('status-text').className = 'text-xs font-bold text-slate-500 uppercase tracking-wide';
-                document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
-                
-                processIncomingData(0, 0, 0);
-            } else {
-                btnConnect.textContent = "Stop Simulation";
-                btnConnect.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-                btnConnect.classList.add('bg-red-500', 'hover:bg-red-600');
-                
-                document.getElementById('status-text').textContent = 'SIM RUNNING';
-                document.getElementById('status-text').className = 'text-xs font-bold text-indigo-600 uppercase tracking-wide';
-                document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse';
-                
-                simInterval = setInterval(runSimulationTick, 100);
-            }
-        });
+        // Boot system
+        window.onload = () => {
+            admireSim.init();
+            knitSim.init();
+        };
     </script>
 </body>
 </html>
