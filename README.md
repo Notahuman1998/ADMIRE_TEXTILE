@@ -1,0 +1,1 @@
+This is a project for personal project to identify how to implement electronics into the textiles
